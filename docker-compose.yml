@@ -22,9 +22,9 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
 
-      - TURN_SERVER=turn:turnserver:3478
-      - TURN_USERNAME=webrtc
-      - TURN_PASSWORD=strongpassword
+      # - TURN_SERVER=turn:turnserver:3478
+      # - TURN_USERNAME=webrtc
+      # - TURN_PASSWORD=strongpassword
     volumes:
       - .:/usr/src/app
       - /usr/src/app/node_modules
@@ -51,20 +51,20 @@ services:
     ports:
       - "6379:6379"
 
-  turnserver:
-    image: coturn/coturn
-    container_name: turnserver
-    restart: always
-    ports:
-      - "3478:3478/udp"
-      - "3478:3478/tcp"
-      - "5349:5349/tcp" # TLS support
-      - "49152-65535:49152-65535/udp" # RTP relay ports
-    volumes:
-      - ./dockerfiles/coturn/turnserver.conf:/etc/turnserver.conf
-    environment:
-      - TURN_USERNAME=webrtc
-      - TURN_PASSWORD=strongpassword
+  # turnserver:
+  #   image: coturn/coturn
+  #   container_name: turnserver
+  #   restart: always
+  #   ports:
+  #     - "3478:3478/udp"
+  #     - "3478:3478/tcp"
+  #     - "5349:5349/tcp" # TLS support
+  #     - "49152-65535:49152-65535/udp" # RTP relay ports
+  #   volumes:
+  #     - ./dockerfiles/coturn/turnserver.conf:/etc/turnserver.conf
+  #   environment:
+  #     - TURN_USERNAME=webrtc
+  #     - TURN_PASSWORD=strongpassword
 
 volumes:
   postgres_data:
