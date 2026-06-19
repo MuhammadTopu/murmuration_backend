@@ -1,0 +1,301 @@
+import {
+  BadGatewayException,
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { UserRepository } from '../../../common/repository/user/user.repository';
+import appConfig from '../../../config/app.config';
+import { SojebStorage } from '../../../common/lib/Disk/SojebStorage';
+import { DateHelper } from '../../../common/helper/date.helper';
+import { Prisma } from '@prisma/client';
+
+@Injectable()
+export class UserService {
+  constructor(private prisma: PrismaService) {}
+
+  async create(createUserDto: CreateUserDto) {
+    try {
+      const user = await UserRepository.createUser(createUserDto);
+
+      if (user.success) {
+        return {
+          success: user.success,
+          message: user.message,
+        };
+      } else {
+        return {
+          success: user.success,
+          message: user.message,
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+  }
+
+  async findAll({
+    status,
+    approved,
+    joined,
+    plan,
+    paginationDto,
+  }: {
+    q?: string;
+    status?: string;
+    approved?: string;
+    joined?: string;
+    plan?: string;
+    paginationDto: { page: number; perPage: number };
+  }) {
+    try {
+      const page = paginationDto.page || 1;
+      const perPage = paginationDto.perPage || 10;
+      const skip = (page - 1) * perPage;
+      const take = perPage;
+
+      const where_condition: Prisma.UserWhereInput = {};
+
+      if (status) {
+        where_condition['status'] = parseInt(status);
+      }
+
+      if (approved) {
+        where_condition['approved_at'] =
+          approved == 'approved' ? { not: null } : { equals: null };
+      }
+      if (joined) {
+        const start = new Date(`${joined}T00:00:00.000Z`);
+        const end = new Date(`${joined}T23:59:59.999Z`);
+
+        where_condition['created_at'] = {
+          gte: start,
+          lte: end,
+        };
+      }
+      if (plan) {
+        where_condition.subscriptionPlan = {
+          equals: plan,
+          mode: 'insensitive',
+        };
+      }
+      const total = await this.prisma.user.count({
+        where: {
+          ...where_condition,
+          type: 'user',
+        },
+      });
+
+      const users = await this.prisma.user.findMany({
+        where: {
+          ...where_condition,
+          type: 'user',
+        },
+        skip,
+        take,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone_number: true,
+          address: true,
+          type: true,
+          status: true,
+          approved_at: true,
+          created_at: true,
+          updated_at: true,
+          subscriptionPlan: true,
+        },
+      });
+
+      return {
+        success: true,
+        data: users,
+        pagination: {
+          total,
+          page,
+          perPage,
+          totalPages: Math.ceil(total / perPage),
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+  }
+
+  async findOne(id: string) {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: {
+          id: id,
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          type: true,
+          phone_number: true,
+          approved_at: true,
+          created_at: true,
+          updated_at: true,
+          avatar: true,
+          billing_id: true,
+        },
+      });
+
+      // add avatar url to user
+      if (user.avatar) {
+        user['avatar_url'] = SojebStorage.url(
+          appConfig().storageUrl.avatar + user.avatar,
+        );
+      }
+
+      if (!user) {
+        return {
+          success: false,
+          message: 'User not found',
+        };
+      }
+
+      return {
+        success: true,
+        data: user,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+  }
+
+  async approve(id: string) {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: id },
+      });
+      if (!user) {
+        return {
+          success: false,
+          message: 'User not found',
+        };
+      }
+      await this.prisma.user.update({
+        where: { id: id },
+        data: { approved_at: DateHelper.now() },
+      });
+      return {
+        success: true,
+        message: 'User approved successfully',
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+  }
+
+  async reject(id: string) {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: id },
+      });
+      if (!user) {
+        return {
+          success: false,
+          message: 'User not found',
+        };
+      }
+      await this.prisma.user.update({
+        where: { id: id },
+        data: { approved_at: null },
+      });
+      return {
+        success: true,
+        message: 'User rejected successfully',
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+  }
+
+  async update(id: string, updateUserDto: UpdateUserDto) {
+    try {
+      const user = await UserRepository.updateUser(id, updateUserDto);
+
+      if (user.success) {
+        return {
+          success: user.success,
+          message: user.message,
+        };
+      } else {
+        return {
+          success: user.success,
+          message: user.message,
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+  }
+
+  async remove(id: string) {
+    try {
+      const user = await UserRepository.deleteUser(id);
+      return user;
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+  }
+
+  async userAction(id: string, actionDto: { status?: number }) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (actionDto.status === undefined) {
+      throw new BadRequestException('Status is required');
+    }
+
+    if (user.status === actionDto.status) {
+      throw new BadRequestException(
+        'You cannot update the user with the same status',
+      );
+    }
+
+    await this.prisma.user.update({
+      where: { id },
+      data: {
+        status: actionDto.status,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'User status updated successfully',
+    };
+  }
+}

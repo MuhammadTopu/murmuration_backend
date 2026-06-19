@@ -1,0 +1,510 @@
+import {
+  Body,
+  Controller,
+  Get,
+  HttpException,
+  HttpStatus,
+  Patch,
+  Post,
+  Req,
+  Res,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Request, Response } from 'express';
+import { memoryStorage } from 'multer';
+import { AuthService } from './auth.service';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { VerifyEmailDto } from './dto/verify-email.dto';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { LocalAuthGuard } from './guards/local-auth.guard';
+import { GoogleLoginDto } from './dto/google-login.dto';
+import { AppleAuthGuard } from './guards/apple.guard';
+
+@ApiTags('auth')
+@Controller('auth')
+export class AuthController {
+  constructor(private authService: AuthService) {}
+
+  @ApiOperation({ summary: 'Get user details' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Get('me')
+  async me(@Req() req: Request) {
+    try {
+      const user_id = req.user.userId;
+
+      const response = await this.authService.me(user_id);
+
+      return response;
+    } catch (error) {
+      return {
+        success: false,
+        message: 'Failed to fetch user details',
+      };
+    }
+  }
+
+  @ApiOperation({ summary: 'Register a user' })
+  @Post('register')
+  async create(@Body() data: CreateUserDto) {
+    try {
+      //const name = data.name;
+      const first_name = data.first_name;
+      const last_name = data.last_name;
+      const email = data.email;
+      const password = data.password;
+      const type = data.type;
+      const is_agrred_to_terms_and_policy = data.is_agrred_to_terms_and_policy;
+      const fcm_token = data.fcm_token;
+
+      if (is_agrred_to_terms_and_policy == false) {
+        throw new HttpException(
+          'You must agree to the terms and policy',
+          HttpStatus.UNAUTHORIZED,
+        );
+      }
+
+      const response = await this.authService.register({
+        name: first_name + ' ' + last_name,
+        first_name: first_name,
+        last_name: last_name,
+        email: email,
+        password: password,
+        type: type,
+        is_agrred_to_terms_and_policy: is_agrred_to_terms_and_policy,
+        fcm_token,
+      });
+
+      return response;
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+  }
+
+  //update user preff
+
+  @UseGuards(JwtAuthGuard)
+  @Post('userPreff')
+  async updateUserPreff(@Req() req: Request, @Body() body: any) {
+    try {
+      const preffId = req.user.userId;
+      return this.authService.updateUserPreferences(preffId, body);
+    } catch (error) {}
+  }
+
+  // login user
+  @ApiOperation({ summary: 'Login user' })
+  @UseGuards(LocalAuthGuard)
+  @Post('login')
+  async login(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Body('fcm_token') fcmToken: string,
+  ) {
+    try {
+      const user_id = req.user.id;
+      const user_email = req.user.email;
+
+      const response = await this.authService.login({
+        userId: user_id,
+        email: user_email,
+        fcmToken,
+      });
+
+      res.cookie('refresh_token', response.authorization.refresh_token, {
+        httpOnly: true,
+        secure: true,
+        maxAge: 1000 * 60 * 60 * 24 * 7,
+      });
+
+      res.json(response);
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  }
+
+  @ApiOperation({ summary: 'Refresh token' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('refresh-token')
+  async refreshToken(
+    @Req() req: Request,
+    @Body() body: { refresh_token: string },
+  ) {
+    try {
+      const user_id = req.user.userId;
+
+      const response = await this.authService.refreshToken(
+        user_id,
+        body.refresh_token,
+      );
+
+      return response;
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('logout')
+  async logout(@Req() req: Request) {
+    try {
+      const userId = req.user.userId;
+      const response = await this.authService.revokeRefreshToken(userId);
+      return response;
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+  }
+
+  @Post('google')
+  async googleFirebaseLogin(@Body() dto: GoogleLoginDto) {
+    return this.authService.googleLogin(dto.token, dto.fcm_token);
+  }
+
+  @Post('apple')
+  async appleLogin(
+    @Body('idToken') idToken: string,
+    @Body('fcm_token') fcmToken?: string,
+  ) {
+    return this.authService.appleLogin(idToken, fcmToken);
+  }
+
+  // update user
+  @ApiOperation({ summary: 'Update user' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Patch('update')
+  @UseInterceptors(
+    FileInterceptor('image', {
+      storage: memoryStorage(),
+    }),
+  )
+  async updateUser(
+    @Req() req: Request,
+    @Body() data: UpdateUserDto,
+    @UploadedFile() image: Express.Multer.File,
+  ) {
+    try {
+      const user_id = req.user.userId;
+      const response = await this.authService.updateUser(user_id, data, image);
+      return response;
+    } catch (error) {
+      return {
+        success: false,
+        message: 'Failed to update user',
+      };
+    }
+  }
+
+  // --------------change password---------
+
+  @ApiOperation({ summary: 'Forgot password' })
+  @Post('forgot-password')
+  async forgotPassword(@Body() data: { email: string }) {
+    try {
+      const email = data.email;
+      if (!email) {
+        throw new HttpException('Email not provided', HttpStatus.UNAUTHORIZED);
+      }
+      return await this.authService.forgotPassword(email);
+    } catch (error) {
+      return {
+        success: false,
+        message: 'Something went wrong',
+      };
+    }
+  }
+
+  @ApiOperation({ summary: 'Forgot password' })
+  @Post('requestNewOtpForgetPass')
+  async resendForgotPasswordOtp(@Body() data: { email: string }) {
+    try {
+      const email = data.email;
+      if (!email) {
+        throw new HttpException('Email not provided', HttpStatus.UNAUTHORIZED);
+      }
+      return await this.authService.resendForgotPasswordOtp(email);
+    } catch (error) {
+      return {
+        success: false,
+        message: 'Something went wrong',
+      };
+    }
+  }
+
+  @Post('forgetPasswordOtpVerify')
+  async forgetPasswordOtpVerify(
+    @Body() data: { email: string; token: string },
+  ) {
+    try {
+      const email = data.email;
+      const token = data.token;
+
+      return await this.authService.forgotPasswordOtpVerify({ email, token });
+    } catch (error) {}
+  }
+  // verify email to verify the email
+  @ApiOperation({ summary: 'Verify email' })
+  @Post('verify-email')
+  async verifyEmail(@Body() data: VerifyEmailDto) {
+    try {
+      const email = data.email;
+      const token = data.token;
+      if (!email) {
+        throw new HttpException('Email not provided', HttpStatus.UNAUTHORIZED);
+      }
+      if (!token) {
+        throw new HttpException('Token not provided', HttpStatus.UNAUTHORIZED);
+      }
+      return await this.authService.verifyEmail({
+        email: email,
+        token: token,
+      });
+    } catch (error) {
+      return {
+        success: false,
+        message: 'Failed to verify email',
+      };
+    }
+  }
+
+  // resend verification email to verify the email
+  @ApiOperation({ summary: 'Resend verification email' })
+  @Post('resend-verification-email')
+  async resendVerificationEmail(@Body() data: { email: string }) {
+    try {
+      const email = data.email;
+      if (!email) {
+        throw new HttpException('Email not provided', HttpStatus.UNAUTHORIZED);
+      }
+      return await this.authService.resendVerificationEmail(email);
+    } catch (error) {
+      return {
+        success: false,
+        message: 'Failed to resend verification email',
+      };
+    }
+  }
+
+  // reset password if user forget the password
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Reset password' })
+  @Post('reset-password')
+  async resetPassword(@Req() req: Request, @Body() data: { password: string }) {
+    try {
+      const email = req.user.email;
+      const token = req.user.userId;
+      const password = data.password;
+
+      if (!email) {
+        throw new HttpException('Email not provided', HttpStatus.UNAUTHORIZED);
+      }
+      if (!token) {
+        throw new HttpException('Token not provided', HttpStatus.UNAUTHORIZED);
+      }
+      if (!password) {
+        throw new HttpException(
+          'Password not provided',
+          HttpStatus.UNAUTHORIZED,
+        );
+      }
+      return await this.authService.resetPassword({
+        email: email,
+        token: token,
+        password: password,
+      });
+    } catch (error) {
+      return {
+        success: false,
+        message: 'Something went wrong',
+      };
+    }
+  }
+
+  // change password if user want to change the password
+  @ApiOperation({ summary: 'Change password' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('change-password')
+  async changePassword(
+    @Req() req: Request,
+    @Body() data: { email: string; old_password: string; new_password: string },
+  ) {
+    try {
+      // const email = data.email;
+      const user_id = req.user.userId;
+
+      const oldPassword = data.old_password;
+      const newPassword = data.new_password;
+      // if (!email) {
+      //   throw new HttpException('Email not provided', HttpStatus.UNAUTHORIZED);
+      // }
+      if (!oldPassword) {
+        throw new HttpException(
+          'Old password not provided',
+          HttpStatus.UNAUTHORIZED,
+        );
+      }
+      if (!newPassword) {
+        throw new HttpException(
+          'New password not provided',
+          HttpStatus.UNAUTHORIZED,
+        );
+      }
+      return await this.authService.changePassword({
+        // email: email,
+        user_id: user_id,
+        oldPassword: oldPassword,
+        newPassword: newPassword,
+      });
+    } catch (error) {
+      return {
+        success: false,
+        message: 'Failed to change password',
+      };
+    }
+  }
+
+  // --------------end change password---------
+
+  // -------change email address------
+  @ApiOperation({ summary: 'request email change' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('request-email-change')
+  async requestEmailChange(
+    @Req() req: Request,
+    @Body() data: { email: string },
+  ) {
+    try {
+      const user_id = req.user.userId;
+      const email = data.email;
+      if (!email) {
+        throw new HttpException('Email not provided', HttpStatus.UNAUTHORIZED);
+      }
+      return await this.authService.requestEmailChange(user_id, email);
+    } catch (error) {
+      return {
+        success: false,
+        message: 'Something went wrong',
+      };
+    }
+  }
+
+  @ApiOperation({ summary: 'Change email address' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('change-email')
+  async changeEmail(
+    @Req() req: Request,
+    @Body() data: { email: string; token: string },
+  ) {
+    try {
+      const user_id = req.user.userId;
+      const email = data.email;
+
+      const token = data.token;
+      if (!email) {
+        throw new HttpException('Email not provided', HttpStatus.UNAUTHORIZED);
+      }
+      if (!token) {
+        throw new HttpException('Token not provided', HttpStatus.UNAUTHORIZED);
+      }
+      return await this.authService.changeEmail({
+        user_id: user_id,
+        new_email: email,
+        token: token,
+      });
+    } catch (error) {
+      return {
+        success: false,
+        message: 'Something went wrong',
+      };
+    }
+  }
+  // -------end change email address------
+
+  // --------- 2FA ---------
+  @ApiOperation({ summary: 'Generate 2FA secret' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('generate-2fa-secret')
+  async generate2FASecret(@Req() req: Request) {
+    try {
+      const user_id = req.user.userId;
+      return await this.authService.generate2FASecret(user_id);
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+  }
+
+  @ApiOperation({ summary: 'Verify 2FA' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('verify-2fa')
+  async verify2FA(@Req() req: Request, @Body() data: { token: string }) {
+    try {
+      const user_id = req.user.userId;
+      const token = data.token;
+      return await this.authService.verify2FA(user_id, token);
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+  }
+
+  @ApiOperation({ summary: 'Enable 2FA' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('enable-2fa')
+  async enable2FA(@Req() req: Request) {
+    try {
+      const user_id = req.user.userId;
+      return await this.authService.enable2FA(user_id);
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+  }
+
+  @ApiOperation({ summary: 'Disable 2FA' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('disable-2fa')
+  async disable2FA(@Req() req: Request) {
+    try {
+      const user_id = req.user.userId;
+      return await this.authService.disable2FA(user_id);
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+  }
+  // --------- end 2FA ---------
+}
