@@ -45,6 +45,13 @@ export class QuotesController {
     return this.quotesService.getRandomAdminQuote(userId);
   }
 
+    @Get('favorites')
+  @UseGuards(JwtAuthGuard) 
+  getFavoriteQuotes(@Req() req: any) {
+    const userID = req.user?.userId;
+    return this.quotesService.getFavoriteQuotes(userID);
+  }
+
   @Get('share/:id')
   @ApiOperation({ summary: 'Public share page for quotes' })
   async shareQuote(
@@ -125,6 +132,8 @@ export class QuotesController {
     const userID = req.user?.userId;
     return this.quotesService.findOne(id, userID);
   }
+
+
 
   @Post('addRemoveReact/:id')
   @UseGuards(JwtAuthGuard) 

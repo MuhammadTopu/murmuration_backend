@@ -39,17 +39,25 @@ export class JournelsService {
   }
 
   // ── Upload multiple photos, store paths only ───────────────────────────────
-  private async uploadPhotos(photos: Express.Multer.File[]): Promise<string[]> {
-    const paths: string[] = [];
-    for (const photo of photos) {
-      const fileName = `${StringHelper.randomString()}-${photo.originalname}`;
-      const storagePath = this.photoPath(fileName); // e.g. /journal-photos/abc123-photo.jpg
-      await SojebStorage.put(storagePath, photo.buffer);
-      paths.push(storagePath); // ✅ store path, not full URL
-    }
-    return paths;
+private async uploadPhotos(
+  photos: Express.Multer.File[],
+): Promise<string[]> {
+  const paths: string[] = [];
+
+  for (const photo of photos) {
+    const ext = photo.originalname.split('.').pop(); // keep extension only
+
+    const fileName = `${StringHelper.randomString()}.${ext}`;
+
+    const storagePath = this.photoPath(fileName);
+
+    await SojebStorage.put(storagePath, photo.buffer);
+
+    paths.push(storagePath);
   }
 
+  return paths;
+}
   // ── Delete photos by stored paths ─────────────────────────────────────────
   private async deletePhotos(paths: string[]): Promise<void> {
     for (const path of paths) {
@@ -487,4 +495,69 @@ export class JournelsService {
 
     return { success: true, message: 'Journal deleted successfully' };
   }
+
+async getAllLikedJournals(
+  userId: string,
+  paginationDto: { page?: number; perPage?: number },
+) {
+  const page = paginationDto.page || 1;
+  const perPage = paginationDto.perPage || 10;
+  const skip = (page - 1) * perPage;
+
+  const total = await this.prisma.likeJournel.count({
+    where: { userId },
+  });
+
+  const likedJournals = await this.prisma.likeJournel.findMany({
+    where: { userId },
+    skip,
+    take: perPage,
+    orderBy: {
+      created_at: 'desc',
+    },
+    include: {
+      journel: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              first_name: true,
+              last_name: true,
+              avatar: true,
+            },
+          },
+          _count: {
+            select: {
+              likeJournels: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const result = likedJournals.map(({ journel }) => ({
+    ...this.formatJournel(journel),
+    likeCount: journel._count.likeJournels,
+    user: {
+      ...journel.user,
+      name:
+        [journel.user.first_name, journel.user.last_name]
+          .filter(Boolean)
+          .join(' ') || null,
+    },
+  }));
+
+  return {
+    success: true,
+    message: 'Liked journals retrieved successfully',
+    data: result,
+    pagination: {
+      total,
+      page,
+      perPage,
+      totalPages: Math.ceil(total / perPage),
+    },
+  };
+}
 }

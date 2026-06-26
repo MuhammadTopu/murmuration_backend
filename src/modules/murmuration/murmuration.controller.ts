@@ -58,14 +58,54 @@ export class MurmurationController {
 
   @UseGuards(JwtAuthGuard)
   @Get()
-  findAll(@Req() req: any,@Query('cursor') cursor?:string) {
-    return this.murmurationService.findAll(req.user.userId,cursor);
+  findAll(@Req() req: any, @Query('cursor') cursor?: string) {
+    return this.murmurationService.findAll(req.user.userId, cursor);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('my-murmurations')
+  getMyMurmurations(
+    @Req() req: any,
+    @Query() paginationDto: { page?: number; perPage?: number },
+  ) {
+    const userId = req.user?.userId;
+    return this.murmurationService.getMyMurmurations(userId, paginationDto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('bookmarked')
+  getBookmarkedMurmurations(
+    @Req() req: any,
+    @Query() paginationDto: { page?: number; perPage?: number },
+  ) {
+    const userId = req.user?.userId;
+    return this.murmurationService.getAllBookmarkedMurmurations(
+      userId,
+      paginationDto,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('liked')
+  getLikedMurmurations(
+    @Req() req: any,
+    @Query() paginationDto: { page?: number; perPage?: number },
+  ) {
+    const userId = req.user?.userId;
+    return this.murmurationService.getAllLikedMurmurations(userId, paginationDto);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get(':id')
   findOne(@Param('id') id: string, @Req() req: any) {
     return this.murmurationService.findOne(id, req.user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('bookmark/:id')
+  bookmarkMurmuration(@Param('id') id: string, @Req() req: any) {
+    const user_id = req.user?.userId;
+    return this.murmurationService.bookmarkMurmuration(user_id, id);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -84,18 +124,14 @@ export class MurmurationController {
 
   @UseGuards(JwtAuthGuard)
   @Post('comment/:id')
-  addComment(
-    @Param('id') id: string,
-    @Body() dto: any,
-    @Req() req: any,
-  ) {
+  addComment(@Param('id') id: string, @Body() dto: any, @Req() req: any) {
     const user_id = req.user?.userId;
     return this.murmurationService.addComment(user_id, id, dto);
   }
 
   @Delete('delete/:id')
-  remove(@Param('id') id: string,@Req() req:any) {
-    const userId=req.user.userId
-    return this.murmurationService.remove(id,userId);
+  remove(@Param('id') id: string, @Req() req: any) {
+    const userId = req.user.userId;
+    return this.murmurationService.remove(id, userId);
   }
 }

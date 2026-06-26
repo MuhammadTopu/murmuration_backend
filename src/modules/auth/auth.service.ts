@@ -251,7 +251,7 @@ export class AuthService {
         }
         return result;
       } else {
-        throw new UnauthorizedException('Password not matched');
+        throw new UnauthorizedException('Email or password not matched');
         // return {
         //   success: false,
         //   message: 'Password not matched',

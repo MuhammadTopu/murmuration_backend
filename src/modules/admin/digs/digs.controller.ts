@@ -16,10 +16,55 @@ import { CreateDigDto, SaveResponseDto } from './dto/create-dig.dto';
 import { UpdateDigDto } from './dto/update-dig.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { PaginationDto } from '../../../common/pagination/paginatio.dto';
+import { User } from '../user/entities/user.entity';
 
 @Controller('admin/digs')
 export class DigsController {
   constructor(private readonly digsService: DigsService) {}
+
+
+
+
+  // evactions
+
+  @UseGuards(JwtAuthGuard)
+  @Get('evactions')
+  async getAllEvactions(@Req() req: any, @Query() paginationDto: PaginationDto) {
+    const userId = req.user?.userId;
+    return this.digsService.getAllEvactions(userId, paginationDto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('evactions/favorite')
+  async getFavoriteEvactions(
+    @Req() req: any,
+    @Query() paginationDto: PaginationDto,
+  ) {
+    const userId = req.user?.userId;
+    return this.digsService.getFavoriteEvactions(userId, paginationDto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('evactions/my')
+  async getMyEvactions(
+    @Req() req: any,
+    @Query() paginationDto: PaginationDto,
+  ) {
+    const userId = req.user?.userId;
+    return this.digsService.getMyEvactions(userId, paginationDto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('evactions/favorite/:evactionId')
+  async toggleFavoriteEvaction(
+    @Param('evactionId') evactionId: string,
+    @Req() req: any,
+  ) {
+    const userId = req.user?.userId;
+    return this.digsService.toggleFavoriteEvaction(userId, evactionId);
+  }
+
+  // digs
 
   @UseGuards(JwtAuthGuard)
   @Post()

@@ -247,67 +247,69 @@ export class QuotesService {
       };
     }
   }
-  async getRandomAdminQuote(userId: string) {
-    try {
-      // ── Get total count of all quotes ─────────────────────────
-      const total = await this.prisma.quote.count({
-        where: {
-          deleted_at: null,
-          status: true,
-        },
-      });
+async getRandomAdminQuote(userId: string) {
+  try {
 
-      if (total === 0) {
-        return {
-          success: true,
-          message: 'No quotes found',
-          data: [],
-        };
-      }
+    // repository for fetching random admin quotes
+    const whereClause = {
+      deleted_at: null,
+      status: true,
+      user: {
+        type: 'admin',
+      },
+    };
 
-      // ── Fetch all quotes ──────────────────────────────────────
-      const allQuotes = await this.prisma.quote.findMany({
-        where: {
-          deleted_at: null,
-          status: true,
-        },
-      });
+    const total = await this.prisma.quote.count({
+      where: whereClause,
+    });
 
-      // ── Shuffle and pick 5 random quotes ─────────────────────
-      const shuffled = allQuotes.sort(() => Math.random() - 0.5);
-      const randomFive = shuffled.slice(0, Math.min(5, shuffled.length));
-
-      // ── Attach isFavourite + shareLink to each ────────────────
-      const quotesWithMeta = await Promise.all(
-        randomFive.map(async (quote) => {
-          const favourite = await this.prisma.quoteReaction.findFirst({
-            where: {
-              userId: userId,
-              qouteId: quote.id,
-            },
-          });
-
-          return {
-            ...quote,
-            isFavourite: !!favourite,
-            shareLink: this.generateShareLink(quote.id),
-          };
-        }),
-      );
-
+    if (!total) {
       return {
         success: true,
-        message: 'Random quotes retrieved',
-        data: quotesWithMeta,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: 'Failed to fetch random quotes',
-        error: (error as Error).message || error,
+        message: 'No admin quotes found',
+        data: [],
       };
     }
+
+    const allQuotes = await this.prisma.quote.findMany({
+      where: whereClause,
+    });
+
+    const randomQuotes = allQuotes
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 5);
+
+    const quotesWithMeta = await Promise.all(
+      randomQuotes.map(async (quote) => {
+        const isFavourite = await this.prisma.quoteReaction.findFirst({
+          where: {
+            userId,
+            qouteId: quote.id,
+          },
+        });
+
+        return {
+          ...quote,
+          isFavourite: Boolean(isFavourite),
+          shareLink: this.generateShareLink(quote.id),
+        };
+      }),
+    );
+    // repository for fetching random admin quotes ends
+
+    return {
+      success: true,
+      message: 'Random admin quotes retrieved successfully',
+      data: quotesWithMeta,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: 'Failed to fetch random admin quotes',
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
+}
   async getQuoteForShare(quoteId: string) {
     const quote = await this.prisma.quote.findUnique({
       where: { id: quoteId },
@@ -506,4 +508,44 @@ export class QuotesService {
     };
     return text.replace(/[&<>"']/g, (m) => map[m]);
   }
+
+
+  // get favorite quotes for a user
+async getFavoriteQuotes(userId: string) {
+  try {
+    const reactions = await this.prisma.quoteReaction.findMany({
+      where: { userId },
+      include: {
+        qoute: {
+          include: {
+            user: {
+              select: {
+                first_name: true,
+                last_name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const favoriteQuotes = reactions.map((reaction) => ({
+      ...reaction.qoute,
+      isFavourite: true,
+      shareLink: this.generateShareLink(reaction.qoute.id),
+    }));
+
+    return {
+      success: true,
+      message: 'Favorite quotes retrieved successfully',
+      data: favoriteQuotes,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: 'Failed to fetch favorite quotes',
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
 }

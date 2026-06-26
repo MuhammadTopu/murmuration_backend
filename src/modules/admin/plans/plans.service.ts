@@ -12,6 +12,9 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { MessageGateway } from '../../chat/message/message.gateway';
 import { StripeService } from '../../payment/stripe/stripe.service';
 import { StripePayment } from '../../../common/lib/Payment/stripe/StripePayment';
+import { CreateAdDto } from './dto/create-add.dto';
+import { StringHelper } from 'src/common/helper/string.helper';
+import { SojebStorage } from 'src/common/lib/Disk/SojebStorage';
 @Injectable()
 export class PlansService {
   private stripe: Stripe;
@@ -23,6 +26,11 @@ export class PlansService {
   ) {
     this.stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
   }
+
+  private photoPath(fileName: string): string {
+    return `ads/${fileName}`;
+  }
+
   async createPlan(createPlanDto: CreatePlanDto) {
     const {
       title,
@@ -354,5 +362,79 @@ export class PlansService {
 
   remove(id: number) {
     return `This action removes a #${id} plan`;
+  }
+
+  // add creation
+
+  async createAdd(
+    userId: string,
+    createAddDto: CreateAdDto,
+    imageFile?: Express.Multer.File,
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId , type: 'admin'},
+    });
+
+    if (!user) {
+      return { success: false, message: 'User not found' };
+    }
+
+    let imagePath: string | null = null;
+
+    if (imageFile) {
+      const fileName = `${StringHelper.randomString()}-${imageFile.originalname}`;
+      const storagePath = this.photoPath(fileName);
+
+      await SojebStorage.put(storagePath, imageFile.buffer);
+
+      imagePath = storagePath;
+    }
+
+    const ad = await this.prisma.ad.create({
+      data: {
+        title: createAddDto.title,
+        description: createAddDto.description,
+        image: imagePath,
+        link_url: createAddDto.link_url,
+        product_type: createAddDto.product_type,
+        is_active:
+          createAddDto.is_active !== undefined ? createAddDto.is_active : true,
+        sort_order: createAddDto.sort_order ?? 0,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Ad created successfully',
+      data: ad,
+    };
+  }
+
+
+  async getAds() {
+    const ads = await this.prisma.ad.findMany({
+      where: { is_active: true },
+      orderBy: { sort_order: 'asc' },
+    });
+
+    return {
+      success: true,
+      data: ads,
+    };
+  }
+
+  async getAdById(adId: string) {
+    const ad = await this.prisma.ad.findUnique({
+      where: { id: adId , is_active: true },
+    });
+
+    if (!ad) {
+      throw new NotFoundException('Ad not found');
+    }
+
+    return {
+      success: true,
+      data: ad,
+    };
   }
 }

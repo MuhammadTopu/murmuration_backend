@@ -585,5 +585,233 @@ export class MurmurationService {
     }
   }
 
-  async shareMurmuration() {}
+  /// Murmuration Service - Additional Methods
+
+  async getMyMurmurations(
+    userId: string,
+    paginationDto: { page?: number; perPage?: number },
+  ) {
+    const { page = 1, perPage = 10 } = paginationDto;
+    const skip = (page - 1) * perPage;
+
+    const [murmurations, total] = await Promise.all([
+      this.prisma.murmuration.findMany({
+        where: { user_id: userId },
+        orderBy: { created_at: 'desc' },
+        skip,
+        take: perPage,
+      }),
+      this.prisma.murmuration.count({
+        where: { user_id: userId },
+      }),
+    ]);
+
+    const isLikedMap = await this.prisma.murmurationLike.findMany({
+      where: {
+        userId: userId,
+        murmurationId: { in: murmurations.map((m) => m.id) },
+      },
+      select: { murmurationId: true },
+    });
+
+    const likedMurmurationIds = new Set(
+      isLikedMap.map((like) => like.murmurationId),
+    );
+
+    murmurations.forEach((murmuration) => {
+      murmuration['isLiked'] = likedMurmurationIds.has(murmuration.id);
+    });
+
+    return {
+      success: true,
+      message: 'Murmurations fetched successfully',
+      data: murmurations,
+      meta: {
+        total,
+        page,
+        perPage,
+        totalPages: Math.ceil(total / perPage),
+      },
+    };
+  }
+  async getAllLikedMurmurations(
+    userId: string,
+    paginationDto: { page?: number; perPage?: number },
+  ) {
+    const { page = 1, perPage = 10 } = paginationDto;
+    const skip = (page - 1) * perPage;
+
+    const [likedMurmurations, total] = await Promise.all([
+      this.prisma.murmurationLike.findMany({
+        where: { userId },
+        include: {
+          murmuration: {
+            include: {
+              user: true,
+              _count: {
+                select: { murmurationLikes: true, comments: true },
+              },
+            },
+          },
+        },
+        skip,
+        take: perPage,
+      }),
+      this.prisma.murmurationLike.count({
+        where: { userId },
+      }),
+    ]);
+
+    const data = likedMurmurations.map((like) => {
+      const murmuration = like.murmuration;
+      return {
+        id: murmuration.id,
+        type: murmuration.type,
+        title: murmuration.title,
+        text: murmuration.text,
+        media: {
+          image: murmuration.image,
+          audio: murmuration.audio,
+        },
+        createdAt: murmuration.created_at,
+        user: murmuration.user.id,
+        stats: {
+          likes: murmuration._count.murmurationLikes,
+          comments: murmuration._count.comments,
+        },
+        isLiked: true, // Since these are all liked by the user
+      };
+    });
+
+    return {
+      success: true,
+      message: 'Liked murmurations fetched successfully',
+      data,
+      meta: {
+        total,
+        page,
+        perPage,
+        totalPages: Math.ceil(total / perPage),
+      },
+    };
+  }
+  async bookmarkMurmuration(userId: string, murmurationId: string) {
+    // user check
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId, status: 1 },
+    });
+
+    if (!user) {
+      return { success: false, message: 'User not found' };
+    }
+
+    // murmuration check
+    const murmuration = await this.prisma.murmuration.findUnique({
+      where: { id: murmurationId },
+    });
+
+    if (!murmuration) {
+      return { success: false, message: 'Murmuration not found' };
+    }
+
+    // check if already bookmarked
+    const existingBookmark = await this.prisma.murmurationBookmark.findUnique({
+      where: {
+        userId_murmurationId: {
+          userId,
+          murmurationId,
+        },
+      },
+    });
+
+    if (existingBookmark) {
+      // If already bookmarked, remove the bookmark
+      await this.prisma.murmurationBookmark.delete({
+        where: {
+          userId_murmurationId: {
+            userId,
+            murmurationId,
+          },
+        },
+      });
+
+      return {
+        success: true,
+        message: 'Murmuration unbookmarked successfully',
+      };
+    } else {
+      // If not bookmarked, create a new bookmark
+      await this.prisma.murmurationBookmark.create({
+        data: {
+          userId,
+          murmurationId,
+        },
+      });
+
+      return { success: true, message: 'Murmuration bookmarked successfully' };
+    }
+  }
+  async getAllBookmarkedMurmurations(
+    userId: string,
+    paginationDto: { page?: number; perPage?: number },
+  ) {
+    const { page = 1, perPage = 10 } = paginationDto;
+    const skip = (page - 1) * perPage;
+
+    const [bookmarkedMurmurations, total] = await Promise.all([
+      this.prisma.murmurationBookmark.findMany({
+        where: { userId },
+        include: {
+          murmuration: {
+            include: {
+              user: true,
+              _count: {
+                select: { murmurationLikes: true, comments: true },
+              },
+            },
+          },
+        },
+        skip,
+        take: perPage,
+      }),
+      this.prisma.murmurationBookmark.count({
+        where: { userId },
+      }),
+    ]);
+
+    const data = bookmarkedMurmurations.map((bookmark) => {
+      const murmuration = bookmark.murmuration;
+      return {
+        id: murmuration.id,
+        type: murmuration.type,
+        title: murmuration.title,
+        text: murmuration.text,
+        media: {
+          image: murmuration.image,
+          audio: murmuration.audio,
+        },
+        createdAt: murmuration.created_at,
+        user: murmuration.user.id,
+        stats: {
+          likes: murmuration._count.murmurationLikes,
+          comments: murmuration._count.comments,
+        },
+        isBookmarked: true, // Since these are all bookmarked by the user
+      };
+    });
+
+    return {
+      success: true,
+      message: 'Bookmarked murmurations fetched successfully',
+      data,
+      meta: {
+        total,
+        page,
+        perPage,
+        totalPages: Math.ceil(total / perPage),
+      },
+    };
+  }
+
+  
 }

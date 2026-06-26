@@ -66,6 +66,13 @@ export class JournelsController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('liked')
+  getAllLikedJournals(@Req() req: any, @Query() paginationDto: PaginationDto) {
+    const userId = req.user?.userId;
+    return this.journelsService.getAllLikedJournals(userId, paginationDto);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get('recommended')
   getRecommendedJournals(@Req() req: any) {
     const user_id = req.user?.userId;

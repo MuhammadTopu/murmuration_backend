@@ -59,7 +59,7 @@ model User {
   gender        String?
   date_of_birth DateTime? @db.Date
   fcm_token     String?
-  billing_id    String?   // e.g. Stripe Customer ID
+  billing_id    String? // e.g. Stripe Customer ID
 
   type              String?   @default("user")
   email_verified_at DateTime?
@@ -116,10 +116,12 @@ model User {
   dailyDigs            UserDailyDig[]
   notificationSettings NotificationSettings?
   digResponses         DigResponse[]
-  digProgress          UserDigProgress[]     // ✅ pause/resume tracking
+  digProgress          UserDigProgress[] // ✅ pause/resume tracking
   murmurationBookmarks MurmurationBookmark[]
+  evactions            Evaction[]
 
   @@map("users")
+  favoriteEvactions FavoriteEvaction[]
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -376,7 +378,7 @@ model NotificationSettings {
   user    User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   // Client requirement: notifications = user-controlled reminders, not activity log
-  dig_reminders        Boolean @default(true)  // ✅ renamed from notification_reminder
+  dig_reminders        Boolean @default(true) // ✅ renamed from notification_reminder
   meditation_reminders Boolean @default(true)
   new_content_alerts   Boolean @default(true)
   community_updates    Boolean @default(true)
@@ -641,7 +643,7 @@ model Quote {
   status       Boolean?     @default(true)
 
   // source: 'admin' = preloaded by owner, 'user' = added by user
-  source  String? @default("admin") // ✅ 'admin' | 'user'
+  source String? @default("admin") // ✅ 'admin' | 'user'
 
   user_id        String?
   user           User?           @relation(fields: [user_id], references: [id])
@@ -687,8 +689,8 @@ model Journel {
 
   title  String?
   body   String?  @db.Text
-  audio  String?           // stored as filename only
-  photos String[]          // stored as full paths e.g. /journal-photos/file.jpg
+  audio  String? // stored as filename only
+  photos String[] // stored as full paths e.g. /journal-photos/file.jpg
   tags   String[]
 
   user_id      String?
@@ -729,9 +731,9 @@ enum MurmurationType {
 }
 
 model Murmuration {
-  id         String           @id @default(cuid())
-  created_at DateTime         @default(now())
-  updated_at DateTime         @updatedAt
+  id         String    @id @default(cuid())
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
   deleted_at DateTime?
 
   type  MurmurationType?
@@ -842,12 +844,12 @@ model Meditation {
 
   meditation_name        String?
   meditation_description String?
-  meditation_audio       String?  // MP3 — stored as path
-  meditation_video       String?  // MP4 — stored as path ✅
-  thumbnail              String?  // cover image ✅
+  meditation_audio       String? // MP3 — stored as path
+  meditation_video       String? // MP4 — stored as path ✅
+  thumbnail              String? // cover image ✅
   duration               String?
-  type                   String?  @default("audio") // 'audio' | 'video' ✅
-  is_premium             Boolean  @default(true)    // paid users only ✅
+  type                   String? @default("audio") // 'audio' | 'video' ✅
+  is_premium             Boolean @default(true) // paid users only ✅
 
   // ✅ Category tag — e.g. "Who Am I", "Mind Expansion"
   category String?
@@ -905,7 +907,7 @@ model Digs {
   deleted_at DateTime?
 
   title       String
-  description String?  // ✅ dig description
+  description String? // ✅ dig description
 
   // Categorized by the four bodies (client requirement)
   type Focus_Area[]
@@ -958,7 +960,7 @@ model Layers {
   layer_number  Int?
   question_name LayerTitle?
   question_type Type?
-  point         Int?        // XP points awarded for engagement
+  point         Int? // XP points awarded for engagement
   question      String?
 
   // ✅ Transition message shown after completing this layer
@@ -966,9 +968,9 @@ model Layers {
   transition_message String? @default("Noticing this is where change begins.")
 
   // Layer 1: option-based question
-  options        String[]
-  other          Boolean? // ✅ always allow "Other" option (client requirement)
-  other_text     String?  // placeholder for other text box
+  options    String[]
+  other      Boolean? // ✅ always allow "Other" option (client requirement)
+  other_text String? // placeholder for other text box
 
   // Layer 2 & 4: journaling/text
   text String?
@@ -1025,7 +1027,7 @@ model UserWeeklyDig {
   userId    String
   digId     String
   weekStart DateTime
-  position  Int      // 1, 2, 3 (reveal order) — free users get 3/week
+  position  Int // 1, 2, 3 (reveal order) — free users get 3/week
   completed Boolean  @default(false)
 
   user User @relation(fields: [userId], references: [id])
@@ -1044,7 +1046,7 @@ model UserDailyDig {
   userId         String
   digId          String
   assignedAt     DateTime @default(now())
-  dailyDigNumber Int      // position in sequence for paid users (unlimited)
+  dailyDigNumber Int // position in sequence for paid users (unlimited)
   completed      Boolean  @default(false)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1072,14 +1074,44 @@ model Ad {
   updated_at DateTime  @updatedAt
   deleted_at DateTime?
 
-  title       String?
-  description String?
-  image       String?  // ad image path
-  link_url    String?  // where it takes the user (book, shop, etc.)
+  title        String?
+  description  String?
+  image        String? // ad image path
+  link_url     String? // where it takes the user (book, shop, etc.)
   product_type String? // 'book' | 'journal' | 'apparel' | 'cards' | 'life_calendar' | 'other'
 
   is_active  Boolean @default(true)
   sort_order Int?    @default(0)
 
   @@map("ads")
+}
+
+model Evaction {
+  id         String    @id @default(cuid())
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  source_title String?
+  question     String?
+  answer       String?
+  username     String?
+  user_id      String?
+  user         User?   @relation(fields: [user_id], references: [id])
+
+  favoriteEvactions FavoriteEvaction[]
+}
+
+model FavoriteEvaction {
+  id         String    @id @default(cuid())
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  user_id      String?
+  user         User?   @relation(fields: [user_id], references: [id])
+  evaction_id  String?
+  evaction     Evaction?   @relation(fields: [evaction_id], references: [id])
+
+  @@unique([user_id, evaction_id])
 }
