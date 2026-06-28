@@ -707,8 +707,8 @@ model LikeJournel {
   userId    String
   journelId String
 
-  user    User    @relation(fields: [userId], references: [id])
-  journel Journel @relation(fields: [journelId], references: [id])
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  journel Journel @relation(fields: [journelId], references: [id] , onDelete: Cascade)
 
   @@id([userId, journelId])
 }
@@ -767,8 +767,8 @@ model MurmurationLike {
   userId        String
   murmurationId String
 
-  user        User        @relation(fields: [userId], references: [id])
-  murmuration Murmuration @relation(fields: [murmurationId], references: [id])
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  murmuration Murmuration @relation(fields: [murmurationId], references: [id], onDelete: Cascade)
 
   @@id([userId, murmurationId])
   @@index([murmurationId])
@@ -782,8 +782,8 @@ model MurmurationBookmark {
   userId        String
   murmurationId String
 
-  user        User        @relation(fields: [userId], references: [id])
-  murmuration Murmuration @relation(fields: [murmurationId], references: [id])
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  murmuration Murmuration @relation(fields: [murmurationId], references: [id], onDelete: Cascade)
 
   @@unique([userId, murmurationId])
   @@map("murmuration_bookmarks")
@@ -802,7 +802,7 @@ model Comments {
   murmuration    Murmuration? @relation(fields: [murmuration_id], references: [id])
 
   reply_to_comment_id String?
-  reply_to_comment    Comments?  @relation("CommentReplies", fields: [reply_to_comment_id], references: [id])
+  reply_to_comment    Comments?  @relation("CommentReplies", fields: [reply_to_comment_id], references: [id], onDelete: Cascade)
   comments            Comments[] @relation("CommentReplies")
 
   body         String?       @db.Text
@@ -815,8 +815,8 @@ model CommentLike {
   userId    String
   commentId String
 
-  user    User     @relation(fields: [userId], references: [id])
-  comment Comments @relation(fields: [commentId], references: [id])
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comment Comments @relation(fields: [commentId], references: [id], onDelete: Cascade)
 
   @@id([userId, commentId])
   @@index([commentId])
@@ -867,8 +867,8 @@ model MeditationListener {
   userId       String
   meditationId String
 
-  user       User       @relation(fields: [userId], references: [id])
-  meditation Meditation @relation(fields: [meditationId], references: [id])
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meditation Meditation @relation(fields: [meditationId], references: [id], onDelete: Cascade)
 
   @@id([userId, meditationId])
   @@index([meditationId])
@@ -881,10 +881,10 @@ model favoriteMeditation {
   deleted_at DateTime?
 
   user_id String?
-  user    User?   @relation(fields: [user_id], references: [id])
+  user    User?   @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   meditation_id String?
-  meditation    Meditation? @relation(fields: [meditation_id], references: [id])
+  meditation    Meditation? @relation(fields: [meditation_id], references: [id], onDelete: Cascade)
 
   @@map("favorite_meditation")
 }
@@ -913,7 +913,7 @@ model Digs {
   type Focus_Area[]
 
   user_id String?
-  user    User?   @relation(fields: [user_id], references: [id])
+  user    User?   @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   answeredCount Int? @default(0)
 

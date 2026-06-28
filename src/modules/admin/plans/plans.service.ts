@@ -356,23 +356,46 @@ export class PlansService {
     };
   }
 
-  update(id: number, updatePlanDto: UpdatePlanDto) {
+  async update(id: number, updatePlanDto: UpdatePlanDto) {
     return `This action updates a #${id} plan`;
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} plan`;
+
+  async deletePlan(id: string, userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId, type: 'admin' },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found or not authorized');
+    }
+
+    const plan = await this.prisma.plans.findUnique({
+      where: { id },
+    });
+
+    if (!plan) {
+      throw new NotFoundException('Plan not found');
+    }
+
+    await this.prisma.plans.delete({
+      where: { id },
+    });
+
+    return {
+      success: true,
+      message: 'Plan deleted successfully',
+    };
   }
 
   // add creation
-
   async createAdd(
     userId: string,
     createAddDto: CreateAdDto,
     imageFile?: Express.Multer.File,
   ) {
     const user = await this.prisma.user.findUnique({
-      where: { id: userId , type: 'admin'},
+      where: { id: userId, type: 'admin' },
     });
 
     if (!user) {
@@ -410,7 +433,6 @@ export class PlansService {
     };
   }
 
-
   async getAds() {
     const ads = await this.prisma.ad.findMany({
       where: { is_active: true },
@@ -425,7 +447,7 @@ export class PlansService {
 
   async getAdById(adId: string) {
     const ad = await this.prisma.ad.findUnique({
-      where: { id: adId , is_active: true },
+      where: { id: adId, is_active: true },
     });
 
     if (!ad) {
@@ -435,6 +457,33 @@ export class PlansService {
     return {
       success: true,
       data: ad,
+    };
+  }
+
+  async deleteAd(adId: string, userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId, type: 'admin' },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found or not authorized');
+    }
+
+    const ad = await this.prisma.ad.findUnique({
+      where: { id: adId },
+    });
+
+    if (!ad) {
+      throw new NotFoundException('Ad not found');
+    }
+
+    await this.prisma.ad.delete({
+      where: { id: adId },
+    });
+
+    return {
+      success: true,
+      message: 'Ad deleted successfully',
     };
   }
 }

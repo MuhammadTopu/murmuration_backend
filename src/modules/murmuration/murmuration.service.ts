@@ -509,6 +509,40 @@ export class MurmurationService {
     }
   }
 
+  async deleteComment(commentId: string, userId: string) {
+    try {
+      const comment = await this.prisma.comments.findUnique({
+        where: { id: commentId },
+      });
+
+      if (!comment) {
+        return { success: false, message: 'Comment not found' };
+      }
+
+      if (comment.user_id !== userId) {
+        return {
+          success: false,
+          message: 'You do not have permission to delete this comment',
+        };
+      }
+
+      await this.prisma.comments.delete({
+        where: { id: commentId },
+      });
+
+      return {
+        success: true,
+        message: 'Comment deleted successfully',
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: 'Failed to delete comment',
+        error: (error as Error).message || error,
+      };
+    }
+  }
+
   async getCommentsForMurmuration(murmurationId: string) {
     try {
       const comments = await this.prisma.comments.findMany({

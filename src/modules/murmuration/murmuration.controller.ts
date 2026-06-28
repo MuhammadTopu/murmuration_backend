@@ -129,6 +129,13 @@ export class MurmurationController {
     return this.murmurationService.addComment(user_id, id, dto);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Delete('comment/:id')
+  deleteComment(@Param('id') id: string, @Req() req: any) {
+    const user_id = req.user?.userId;
+    return this.murmurationService.deleteComment(id, user_id);
+  }
+
   @Delete('delete/:id')
   remove(@Param('id') id: string, @Req() req: any) {
     const userId = req.user.userId;

@@ -15,6 +15,7 @@ import { PlansService } from './plans.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CreateAdDto } from './dto/create-add.dto';
+import { use } from 'passport';
 
 @Controller('plans')
 export class PlansController {
@@ -78,8 +79,17 @@ export class PlansController {
   //   return this.plansService.update(+id, updatePlanDto);
   // }
 
-  // @Delete(':id')
-  // remove(@Param('id') id: string) {
-  //   return this.plansService.remove(+id);
-  // }
+  @UseGuards(JwtAuthGuard)
+  @Delete('delete/:id')
+  async deletePlan(@Param('id') id: string, @Req() req: any) {
+    const userId = req.user?.userId;
+    return this.plansService.deletePlan(id, userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('ads/:id')
+  async deleteAd(@Param('id') id: string, @Req() req: any) {
+    const userId = req.user?.userId;
+    return this.plansService.deleteAd(id, userId);
+  }
 }

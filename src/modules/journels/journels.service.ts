@@ -39,25 +39,23 @@ export class JournelsService {
   }
 
   // ── Upload multiple photos, store paths only ───────────────────────────────
-private async uploadPhotos(
-  photos: Express.Multer.File[],
-): Promise<string[]> {
-  const paths: string[] = [];
+  private async uploadPhotos(photos: Express.Multer.File[]): Promise<string[]> {
+    const paths: string[] = [];
 
-  for (const photo of photos) {
-    const ext = photo.originalname.split('.').pop(); // keep extension only
+    for (const photo of photos) {
+      const ext = photo.originalname.split('.').pop(); // keep extension only
 
-    const fileName = `${StringHelper.randomString()}.${ext}`;
+      const fileName = `${StringHelper.randomString()}.${ext}`;
 
-    const storagePath = this.photoPath(fileName);
+      const storagePath = this.photoPath(fileName);
 
-    await SojebStorage.put(storagePath, photo.buffer);
+      await SojebStorage.put(storagePath, photo.buffer);
 
-    paths.push(storagePath);
+      paths.push(storagePath);
+    }
+
+    return paths;
   }
-
-  return paths;
-}
   // ── Delete photos by stored paths ─────────────────────────────────────────
   private async deletePhotos(paths: string[]): Promise<void> {
     for (const path of paths) {
@@ -243,31 +241,101 @@ private async uploadPhotos(
   // ─────────────────────────────────────────────────────────────────────────
   // RECOMMENDED
   // ─────────────────────────────────────────────────────────────────────────
-  async getRecommendedJournals(userId: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) return { success: false, message: 'User not found' };
+  async getRecommendedJournals(
+    userId: string,
+    paginationDto: { page?: number; perPage?: number } = {},
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      return {
+        success: false,
+        message: 'User not found',
+      };
+    }
+
+    const page = Number(paginationDto.page) || 1;
+    const perPage = Number(paginationDto.perPage) || 10;
+    const skip = (page - 1) * perPage;
+
+    const whereClause = {
+      user_id: {
+        not: userId,
+      },
+    };
+
+    const total = await this.prisma.journel.count({
+      where: whereClause,
+    });
 
     const journals = await this.prisma.journel.findMany({
-      where: { user_id: { not: userId } },
+      where: whereClause,
+      skip,
+      take: perPage,
+      orderBy: {
+        created_at: 'desc',
+      },
       include: {
+        _count: {
+          select: {
+            likeJournels: true,
+          },
+        },
         user: {
           select: {
             id: true,
             first_name: true,
             last_name: true,
-            name: true,
             avatar: true,
           },
         },
+        likeJournels: {
+          where: {
+            userId,
+          },
+        },
       },
-      orderBy: { created_at: 'desc' },
-      take: 10,
     });
+
+    if (journals.length === 0) {
+      return {
+        success: true,
+        message: 'No recommended journals found.',
+        data: [],
+        pagination: {
+          total: 0,
+          page,
+          perPage,
+          totalPages: 0,
+        },
+      };
+    }
+
+    const result = journals.map(({ _count, likeJournels, ...journal }) => ({
+      ...this.formatJournel(journal),
+      likeCount: _count.likeJournels,
+      isLiked: likeJournels.length > 0,
+      user: {
+        ...journal.user,
+        name:
+          [journal.user.first_name, journal.user.last_name]
+            .filter(Boolean)
+            .join(' ') || null,
+      },
+    }));
 
     return {
       success: true,
       message: 'Recommended journals retrieved successfully',
-      data: journals.map((j) => this.formatJournel(j)),
+      data: result,
+      pagination: {
+        total,
+        page,
+        perPage,
+        totalPages: Math.ceil(total / perPage),
+      },
     };
   }
 
@@ -290,15 +358,16 @@ private async uploadPhotos(
         }),
       },
       orderBy: { created_at: 'desc' },
-      include: { _count: { select: { likeJournels: true } } },
+      include: { _count: { select: { likeJournels: true } }, likeJournels: { where: { userId } } },
     });
 
     return {
       success: true,
       message: 'Personal journals retrieved successfully',
-      data: journals.map(({ _count, ...journal }) => ({
+      data: journals.map(({ _count, likeJournels, ...journal }) => ({
         ...this.formatJournel(journal),
         likeCount: _count.likeJournels,
+        isLiked: likeJournels.length > 0,
       })),
     };
   }
@@ -468,7 +537,7 @@ private async uploadPhotos(
   // ─────────────────────────────────────────────────────────────────────────
   // DELETE
   // ─────────────────────────────────────────────────────────────────────────
-  async remove(user_id: string, id: string) {
+  async deleteAJournal(user_id: string, id: string) {
     const user = await this.prisma.user.findUnique({ where: { id: user_id } });
     if (!user) return { success: false, message: 'User not found' };
 
@@ -496,68 +565,69 @@ private async uploadPhotos(
     return { success: true, message: 'Journal deleted successfully' };
   }
 
-async getAllLikedJournals(
-  userId: string,
-  paginationDto: { page?: number; perPage?: number },
-) {
-  const page = paginationDto.page || 1;
-  const perPage = paginationDto.perPage || 10;
-  const skip = (page - 1) * perPage;
+  async getAllLikedJournals(
+    userId: string,
+    paginationDto: { page?: number; perPage?: number },
+  ) {
+    const page = paginationDto.page || 1;
+    const perPage = paginationDto.perPage || 10;
+    const skip = (page - 1) * perPage;
 
-  const total = await this.prisma.likeJournel.count({
-    where: { userId },
-  });
+    const total = await this.prisma.likeJournel.count({
+      where: { userId },
+    });
 
-  const likedJournals = await this.prisma.likeJournel.findMany({
-    where: { userId },
-    skip,
-    take: perPage,
-    orderBy: {
-      created_at: 'desc',
-    },
-    include: {
-      journel: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              first_name: true,
-              last_name: true,
-              avatar: true,
+    const likedJournals = await this.prisma.likeJournel.findMany({
+      where: { userId },
+      skip,
+      take: perPage,
+      orderBy: {
+        created_at: 'desc',
+      },
+      include: {
+        journel: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                first_name: true,
+                last_name: true,
+                avatar: true,
+              },
             },
-          },
-          _count: {
-            select: {
-              likeJournels: true,
+            _count: {
+              select: {
+                likeJournels: true,
+              },
             },
           },
         },
       },
-    },
-  });
+    });
 
-  const result = likedJournals.map(({ journel }) => ({
-    ...this.formatJournel(journel),
-    likeCount: journel._count.likeJournels,
-    user: {
-      ...journel.user,
-      name:
-        [journel.user.first_name, journel.user.last_name]
-          .filter(Boolean)
-          .join(' ') || null,
-    },
-  }));
+    const result = likedJournals.map(({ journel }) => ({
+      ...this.formatJournel(journel),
+      likeCount: journel._count.likeJournels,
+      user: {
+        ...journel.user,
+        name:
+          [journel.user.first_name, journel.user.last_name]
+            .filter(Boolean)
+            .join(' ') || null,
+      },
+    }));
 
-  return {
-    success: true,
-    message: 'Liked journals retrieved successfully',
-    data: result,
-    pagination: {
-      total,
-      page,
-      perPage,
-      totalPages: Math.ceil(total / perPage),
-    },
-  };
-}
+    return {
+      success: true,
+      message: 'Liked journals retrieved successfully',
+      data: result,
+      pagination: {
+        total,
+        page,
+        perPage,
+        totalPages: Math.ceil(total / perPage),
+      },
+    };
+  }
+
 }

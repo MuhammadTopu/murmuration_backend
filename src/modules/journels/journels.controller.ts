@@ -137,9 +137,9 @@ export class JournelsController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Delete(':id')
+  @Delete('delete/:id')
   remove(@Param('id') id: string, @Req() req: any) {
     const user_id = req.user?.userId;
-    return this.journelsService.remove(user_id, id);
+    return this.journelsService.deleteAJournal(user_id, id);
   }
 }
