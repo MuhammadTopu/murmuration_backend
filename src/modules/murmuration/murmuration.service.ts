@@ -240,6 +240,14 @@ export class MurmurationService {
               userId: user_id,
             },
           },
+          bookmarks: {
+            where: {
+              userId: user_id,
+            },
+            select: {
+              id: true,
+            },
+          },
         },
       });
 
@@ -259,6 +267,7 @@ export class MurmurationService {
           comments: m._count.comments,
         },
         isLiked: m.murmurationLikes.length > 0,
+        isBookmarked: m.bookmarks.length > 0,
       }));
 
       const nextCursor =
@@ -313,6 +322,14 @@ export class MurmurationService {
           murmurationLikes: {
             where: {
               userId: user_id,
+            },
+          },
+          bookmarks: {
+            where: {
+              userId: user_id,
+            },
+            select: {
+              id: true,
             },
           },
           comments: {
@@ -403,6 +420,7 @@ export class MurmurationService {
           comments: murmuration._count.comments,
         },
         isLiked: murmuration.murmurationLikes.length > 0,
+        isBookmarked: murmuration.bookmarks.length > 0,
         comments: murmuration.comments.map((comment) => ({
           id: comment.id,
           body: comment.body,
@@ -846,6 +864,4 @@ export class MurmurationService {
       },
     };
   }
-
-  
 }
